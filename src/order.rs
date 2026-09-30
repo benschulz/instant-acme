@@ -8,7 +8,6 @@ use base64::prelude::{BASE64_URL_SAFE_NO_PAD, Engine};
 #[cfg(all(feature = "rcgen", any(feature = "aws-lc-rs", feature = "ring")))]
 use rcgen::{CertificateParams, DistinguishedName, KeyPair};
 use serde::Serialize;
-use tokio::time::sleep;
 
 use crate::account::AccountInner;
 use crate::types::{
@@ -646,6 +645,7 @@ struct RetryState {
 
 impl RetryState {
     async fn wait(&mut self, after: Option<SystemTime>) -> ControlFlow<Error, ()> {
+
         if let Some(after) = after {
             let now = SystemTime::now();
             if let Ok(delay) = after.duration_since(now) {
@@ -653,13 +653,13 @@ impl RetryState {
                 if next > self.deadline {
                     return ControlFlow::Break(Error::Timeout(Some(next)));
                 } else {
-                    sleep(delay).await;
+                    async_io::Timer::after(delay).await;
                     return ControlFlow::Continue(());
                 }
             }
         }
 
-        sleep(self.delay).await;
+        async_io::Timer::after(self.delay).await;
         self.delay = self.delay.mul_f32(self.backoff);
         match Instant::now() + self.delay > self.deadline {
             true => ControlFlow::Break(Error::Timeout(None)),
